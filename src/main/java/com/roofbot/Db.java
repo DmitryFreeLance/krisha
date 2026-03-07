@@ -36,8 +36,10 @@ public class Db {
                   q1 TEXT,
                   q2 TEXT,
                   q3 TEXT,
+                  contact_method TEXT,
                   name TEXT,
                   phone TEXT,
+                  email TEXT,
                   started_at INTEGER,
                   updated_at INTEGER,
                   last_interaction INTEGER,
@@ -60,8 +62,10 @@ public class Db {
                   q1 TEXT,
                   q2 TEXT,
                   q3 TEXT,
+                  contact_method TEXT,
                   name TEXT,
                   phone TEXT,
+                  email TEXT,
                   created_at INTEGER
                 )
             """);
@@ -72,6 +76,11 @@ public class Db {
                   updated_at INTEGER
                 )
             """);
+
+            try { st.execute("ALTER TABLE calc_sessions ADD COLUMN contact_method TEXT"); } catch (SQLException ignored) {}
+            try { st.execute("ALTER TABLE calc_sessions ADD COLUMN email TEXT"); } catch (SQLException ignored) {}
+            try { st.execute("ALTER TABLE leads ADD COLUMN contact_method TEXT"); } catch (SQLException ignored) {}
+            try { st.execute("ALTER TABLE leads ADD COLUMN email TEXT"); } catch (SQLException ignored) {}
         }
     }
 
@@ -81,7 +90,7 @@ public class Db {
     }
 
     public Session getSession(long userId) throws SQLException {
-        String sql = "SELECT user_id, step, q1, q2, q3, name, phone, started_at, updated_at, last_interaction, abandoned, abandoned_stage, abandoned_at, abandoned_notified, tg_username, tg_first_name, tg_last_name FROM calc_sessions WHERE user_id = ?";
+        String sql = "SELECT user_id, step, q1, q2, q3, contact_method, name, phone, email, started_at, updated_at, last_interaction, abandoned, abandoned_stage, abandoned_at, abandoned_notified, tg_username, tg_first_name, tg_last_name FROM calc_sessions WHERE user_id = ?";
         try (Connection conn = connect(); PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setLong(1, userId);
             try (ResultSet rs = ps.executeQuery()) {
@@ -94,8 +103,10 @@ public class Db {
                         rs.getString("q1"),
                         rs.getString("q2"),
                         rs.getString("q3"),
+                        rs.getString("contact_method"),
                         rs.getString("name"),
                         rs.getString("phone"),
+                        rs.getString("email"),
                         rs.getLong("started_at"),
                         rs.getLong("updated_at"),
                         rs.getLong("last_interaction"),
@@ -113,15 +124,17 @@ public class Db {
 
     public void createOrResetSession(long userId, String step, UserProfile profile) throws SQLException {
         String sql = """
-            INSERT INTO calc_sessions (user_id, step, q1, q2, q3, name, phone, started_at, updated_at, last_interaction, abandoned, abandoned_stage, abandoned_at, abandoned_notified, tg_username, tg_first_name, tg_last_name)
-            VALUES (?, ?, NULL, NULL, NULL, NULL, NULL, ?, ?, ?, 0, NULL, NULL, 0, ?, ?, ?)
+            INSERT INTO calc_sessions (user_id, step, q1, q2, q3, contact_method, name, phone, email, started_at, updated_at, last_interaction, abandoned, abandoned_stage, abandoned_at, abandoned_notified, tg_username, tg_first_name, tg_last_name)
+            VALUES (?, ?, NULL, NULL, NULL, NULL, NULL, NULL, NULL, ?, ?, ?, 0, NULL, NULL, 0, ?, ?, ?)
             ON CONFLICT(user_id) DO UPDATE SET
               step=excluded.step,
               q1=NULL,
               q2=NULL,
               q3=NULL,
+              contact_method=NULL,
               name=NULL,
               phone=NULL,
+              email=NULL,
               started_at=excluded.started_at,
               updated_at=excluded.updated_at,
               last_interaction=excluded.last_interaction,
@@ -179,6 +192,18 @@ public class Db {
         long now = Instant.now().toEpochMilli();
         try (Connection conn = connect(); PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setString(1, phone);
+            ps.setString(2, "DONE");
+            ps.setLong(3, now);
+            ps.setLong(4, userId);
+            ps.executeUpdate();
+        }
+    }
+
+    public void updateEmail(long userId, String email) throws SQLException {
+        String sql = "UPDATE calc_sessions SET email = ?, step = ?, updated_at = ? WHERE user_id = ?";
+        long now = Instant.now().toEpochMilli();
+        try (Connection conn = connect(); PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, email);
             ps.setString(2, "DONE");
             ps.setLong(3, now);
             ps.setLong(4, userId);
@@ -255,8 +280,8 @@ public class Db {
 
     public void saveLead(UserProfile profile, Session session) throws SQLException {
         String sql = """
-            INSERT INTO leads (user_id, username, first_name, last_name, q1, q2, q3, name, phone, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO leads (user_id, username, first_name, last_name, q1, q2, q3, contact_method, name, phone, email, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """;
         long now = Instant.now().toEpochMilli();
         try (Connection conn = connect(); PreparedStatement ps = conn.prepareStatement(sql)) {
@@ -267,16 +292,18 @@ public class Db {
             ps.setString(5, session.q1());
             ps.setString(6, session.q2());
             ps.setString(7, session.q3());
-            ps.setString(8, session.name());
-            ps.setString(9, session.phone());
-            ps.setLong(10, now);
+            ps.setString(8, session.contactMethod());
+            ps.setString(9, session.name());
+            ps.setString(10, session.phone());
+            ps.setString(11, session.email());
+            ps.setLong(12, now);
             ps.executeUpdate();
         }
     }
 
     public List<Lead> getLastLeads(int limit) throws SQLException {
         String sql = """
-            SELECT id, user_id, username, first_name, last_name, q1, q2, q3, name, phone, created_at
+            SELECT id, user_id, username, first_name, last_name, q1, q2, q3, contact_method, name, phone, email, created_at
             FROM leads
             ORDER BY id DESC
             LIMIT ?
@@ -295,8 +322,10 @@ public class Db {
                             rs.getString("q1"),
                             rs.getString("q2"),
                             rs.getString("q3"),
+                            rs.getString("contact_method"),
                             rs.getString("name"),
                             rs.getString("phone"),
+                            rs.getString("email"),
                             rs.getLong("created_at")
                     ));
                 }

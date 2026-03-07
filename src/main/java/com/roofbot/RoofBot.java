@@ -34,8 +34,10 @@ public class RoofBot extends TelegramLongPollingBot {
     private static final String STEP_Q1 = "Q1";
     private static final String STEP_Q2 = "Q2";
     private static final String STEP_Q3 = "Q3";
+    private static final String STEP_CONTACT = "CONTACT";
     private static final String STEP_NAME = "NAME";
     private static final String STEP_PHONE = "PHONE";
+    private static final String STEP_EMAIL = "EMAIL";
     private static final String STEP_DONE = "DONE";
     private static final String START_PHOTO_CACHE_KEY = "start_photo";
     private static final String MENU_TEXT = "↩️ Вернуться в меню";
@@ -111,12 +113,35 @@ public class RoofBot extends TelegramLongPollingBot {
             if (session != null && session.step() != null) {
                 switch (session.step()) {
                     case STEP_NAME -> {
-                        db.updateName(userId, text, STEP_PHONE);
-                        askPhone(chatId);
+                        if (session.contactMethod() == null || "Телефон".equals(session.contactMethod())) {
+                            db.updateName(userId, text, STEP_PHONE);
+                            askPhone(chatId);
+                        } else if ("Почта".equals(session.contactMethod())) {
+                            db.updateName(userId, text, STEP_EMAIL);
+                            askEmail(chatId);
+                        } else {
+                            db.updateName(userId, text, STEP_DONE);
+                            Session updated = db.getSession(userId);
+                            if (updated != null) {
+                                db.saveLead(profile, updated);
+                                notifyAdminsNewLead(profile, updated);
+                            }
+                            sendThankYou(chatId);
+                        }
                         return;
                     }
                     case STEP_PHONE -> {
                         db.updatePhone(userId, text);
+                        Session updated = db.getSession(userId);
+                        if (updated != null) {
+                            db.saveLead(profile, updated);
+                            notifyAdminsNewLead(profile, updated);
+                        }
+                        sendThankYou(chatId);
+                        return;
+                    }
+                    case STEP_EMAIL -> {
+                        db.updateEmail(userId, text);
                         Session updated = db.getSession(userId);
                         if (updated != null) {
                             db.saveLead(profile, updated);
@@ -178,7 +203,14 @@ public class RoofBot extends TelegramLongPollingBot {
 
         if (data.startsWith("q3_")) {
             String answer = q3Label(data);
-            db.updateAnswer(userId, "q3", answer, STEP_NAME);
+            db.updateAnswer(userId, "q3", answer, STEP_CONTACT);
+            askContactMethod(chatId);
+            return;
+        }
+
+        if (data.startsWith("contact_")) {
+            String method = contactLabel(data);
+            db.updateAnswer(userId, "contact_method", method, STEP_NAME);
             askName(chatId);
             return;
         }
@@ -292,12 +324,20 @@ public class RoofBot extends TelegramLongPollingBot {
         sendQuestion(chatId, "Какая примерно площадь кровли?", q3Buttons());
     }
 
+    private void askContactMethod(long chatId) throws TelegramApiException {
+        sendQuestion(chatId, "Выберите предпочтительный способ связи:", contactButtons());
+    }
+
     private void askName(long chatId) throws TelegramApiException {
         sendQuestion(chatId, "Введите ваше имя:", menuOnlyButtons());
     }
 
     private void askPhone(long chatId) throws TelegramApiException {
         sendQuestion(chatId, "Введите телефон для связи:", menuOnlyButtons());
+    }
+
+    private void askEmail(long chatId) throws TelegramApiException {
+        sendQuestion(chatId, "Введите e-mail для связи:", menuOnlyButtons());
     }
 
     private void sendThankYou(long chatId) throws TelegramApiException {
@@ -317,8 +357,6 @@ public class RoofBot extends TelegramLongPollingBot {
                 "- Работаем без посредников, только напрямую с собственником.\n\n" +
                 "✅ Смета и консультации бесплатно, выезды для обследования объекта по согласованию (по ТиНАО бесплатно).\n\n" +
                 "⚒️ Как работаем : выезд → осмотр/диагностика → фотофиксация → смета → договор → поставка материала → монтаж → уборка → приёмка.\n\n" +
-                "https://vk.com/roof77\n" +
-                "https://roofbuy.ru/\n\n" +
                 "С уважением, Дмитрий (прораб, строительное образование ПГС МГСУ).\n" +
                 "Звоните, задавайте вопросы.\n" +
                 "<code>+7 985 731-85-85</code>";
@@ -416,7 +454,9 @@ public class RoofBot extends TelegramLongPollingBot {
             LocalDateTime dt = LocalDateTime.ofInstant(Instant.ofEpochMilli(lead.createdAt()), ZoneId.systemDefault());
             sb.append(i + 1).append(") ")
                     .append(lead.name()).append(" — ")
-                    .append(lead.phone()).append("\n")
+                    .append(lead.contactMethod()).append("\n")
+                    .append("📞 ").append(lead.phone() == null ? "—" : lead.phone()).append("\n")
+                    .append("📧 ").append(lead.email() == null ? "—" : lead.email()).append("\n")
                     .append("🛠 ").append(lead.q1()).append("\n")
                     .append("🏠 ").append(lead.q2()).append("\n")
                     .append("📐 ").append(lead.q3()).append("\n")
@@ -497,6 +537,17 @@ public class RoofBot extends TelegramLongPollingBot {
         return keyboard;
     }
 
+    private InlineKeyboardMarkup contactButtons() {
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        rows.add(List.of(callbackButton("Телеграмм", "contact_tg")));
+        rows.add(List.of(callbackButton("Телефон", "contact_phone")));
+        rows.add(List.of(callbackButton("Почта", "contact_email")));
+        rows.add(List.of(callbackButton(MENU_TEXT, "menu")));
+        InlineKeyboardMarkup keyboard = new InlineKeyboardMarkup();
+        keyboard.setKeyboard(rows);
+        return keyboard;
+    }
+
     private InlineKeyboardMarkup menuOnlyButtons() {
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
         rows.add(List.of(callbackButton(MENU_TEXT, "menu")));
@@ -562,9 +613,20 @@ public class RoofBot extends TelegramLongPollingBot {
             case STEP_Q1 -> "Вопрос 1: Что необходимо сделать";
             case STEP_Q2 -> "Вопрос 2: Тип кровли";
             case STEP_Q3 -> "Вопрос 3: Площадь кровли";
+            case STEP_CONTACT -> "Выбор способа связи";
             case STEP_NAME -> "Ввод имени";
             case STEP_PHONE -> "Ввод телефона";
+            case STEP_EMAIL -> "Ввод e-mail";
             default -> "Неизвестный этап";
+        };
+    }
+
+    private String contactLabel(String data) {
+        return switch (data) {
+            case "contact_tg" -> "Телеграмм";
+            case "contact_phone" -> "Телефон";
+            case "contact_email" -> "Почта";
+            default -> "Не указано";
         };
     }
 
@@ -584,7 +646,9 @@ public class RoofBot extends TelegramLongPollingBot {
                 .append("</a>\n")
                 .append("🏷 Тег: ").append(username).append("\n")
                 .append("✍️ Имя (из анкеты): ").append(session.name()).append("\n")
-                .append("📞 Телефон: ").append(session.phone()).append("\n")
+                .append("📡 Способ связи: ").append(session.contactMethod()).append("\n")
+                .append("📞 Телефон: ").append(session.phone() == null ? "—" : session.phone()).append("\n")
+                .append("📧 Почта: ").append(session.email() == null ? "—" : session.email()).append("\n")
                 .append("🛠 Что нужно: ").append(session.q1()).append("\n")
                 .append("🏠 Тип кровли: ").append(session.q2()).append("\n")
                 .append("📐 Площадь: ").append(session.q3());

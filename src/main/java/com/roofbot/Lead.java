@@ -9,8 +9,10 @@ public record Lead(
         String q1,
         String q2,
         String q3,
+        String contactMethod,
         String name,
         String phone,
+        String email,
         long createdAt
 ) {
 }
