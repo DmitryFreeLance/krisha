@@ -11,6 +11,7 @@ import org.telegram.telegrambots.meta.api.methods.send.SendPhoto;
 import org.telegram.telegrambots.meta.api.objects.CallbackQuery;
 import org.telegram.telegrambots.meta.api.objects.InputFile;
 import org.telegram.telegrambots.meta.api.objects.Message;
+import org.telegram.telegrambots.meta.api.objects.PhotoSize;
 import org.telegram.telegrambots.meta.api.objects.Update;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton;
@@ -36,6 +37,8 @@ public class RoofBot extends TelegramLongPollingBot {
     private static final String STEP_NAME = "NAME";
     private static final String STEP_PHONE = "PHONE";
     private static final String STEP_DONE = "DONE";
+    private static final String START_PHOTO_CACHE_KEY = "start_photo";
+    private static final String MENU_TEXT = "↩️ Вернуться в меню";
 
     private final BotConfig config;
     private final Db db;
@@ -232,6 +235,22 @@ public class RoofBot extends TelegramLongPollingBot {
 
         InlineKeyboardMarkup keyboard = mainMenuKeyboard(config.isAdmin(userId));
 
+        try {
+            String cachedFileId = db.getMediaFileId(START_PHOTO_CACHE_KEY);
+            if (cachedFileId != null && !cachedFileId.isBlank()) {
+                SendPhoto photo = new SendPhoto();
+                photo.setChatId(String.valueOf(chatId));
+                photo.setPhoto(new InputFile(cachedFileId));
+                photo.setCaption(text);
+                photo.setParseMode(ParseMode.HTML);
+                photo.setReplyMarkup(keyboard);
+                execute(photo);
+                return;
+            }
+        } catch (Exception e) {
+            log.warn("Failed to load cached media id", e);
+        }
+
         if (Files.exists(config.photoPath())) {
             SendPhoto photo = new SendPhoto();
             photo.setChatId(String.valueOf(chatId));
@@ -239,7 +258,8 @@ public class RoofBot extends TelegramLongPollingBot {
             photo.setCaption(text);
             photo.setParseMode(ParseMode.HTML);
             photo.setReplyMarkup(keyboard);
-            execute(photo);
+            Message sent = execute(photo);
+            cacheStartPhotoId(sent);
         } else {
             SendMessage msg = new SendMessage();
             msg.setChatId(String.valueOf(chatId));
@@ -301,10 +321,11 @@ public class RoofBot extends TelegramLongPollingBot {
                 "https://roofbuy.ru/\n\n" +
                 "С уважением, Дмитрий (прораб, строительное образование ПГС МГСУ).\n" +
                 "Звоните, задавайте вопросы.\n" +
-                "+7985-731-85-85";
+                "<code>+7 985 731-85-85</code>";
         SendMessage msg = new SendMessage();
         msg.setChatId(String.valueOf(chatId));
         msg.setText(text);
+        msg.setParseMode(ParseMode.HTML);
         msg.setReplyMarkup(menuOnlyButtons());
         execute(msg);
     }
@@ -337,10 +358,27 @@ public class RoofBot extends TelegramLongPollingBot {
     private void sendPhoneCard(long chatId) throws TelegramApiException {
         SendContact contact = new SendContact();
         contact.setChatId(String.valueOf(chatId));
-        contact.setPhoneNumber("+79005553535");
+        contact.setPhoneNumber("+79857318585");
         contact.setFirstName("Дмитрий");
         contact.setLastName("Прораб");
         execute(contact);
+    }
+
+    private void cacheStartPhotoId(Message message) {
+        if (message == null || message.getPhoto() == null || message.getPhoto().isEmpty()) {
+            return;
+        }
+        PhotoSize best = message.getPhoto().stream()
+                .max((a, b) -> Integer.compare(a.getFileSize(), b.getFileSize()))
+                .orElse(null);
+        if (best == null || best.getFileId() == null) {
+            return;
+        }
+        try {
+            db.upsertMediaFileId(START_PHOTO_CACHE_KEY, best.getFileId());
+        } catch (Exception e) {
+            log.warn("Failed to cache media id", e);
+        }
     }
 
     private void sendAdminMenu(long chatId) throws TelegramApiException {
@@ -426,7 +464,7 @@ public class RoofBot extends TelegramLongPollingBot {
         rows.add(List.of(callbackButton("Утеплить кровлю", "q1_4")));
         rows.add(List.of(callbackButton("Монтаж кровельных аксессуаров", "q1_5")));
         rows.add(List.of(callbackButton("Другое", "q1_6")));
-        rows.add(List.of(callbackButton("Вернуться в меню", "menu")));
+        rows.add(List.of(callbackButton(MENU_TEXT, "menu")));
         InlineKeyboardMarkup keyboard = new InlineKeyboardMarkup();
         keyboard.setKeyboard(rows);
         return keyboard;
@@ -440,7 +478,7 @@ public class RoofBot extends TelegramLongPollingBot {
         rows.add(List.of(callbackButton("Керамическая черепица", "q2_4")));
         rows.add(List.of(callbackButton("Ондулин", "q2_5")));
         rows.add(List.of(callbackButton("Другое", "q2_6")));
-        rows.add(List.of(callbackButton("Вернуться в меню", "menu")));
+        rows.add(List.of(callbackButton(MENU_TEXT, "menu")));
         InlineKeyboardMarkup keyboard = new InlineKeyboardMarkup();
         keyboard.setKeyboard(rows);
         return keyboard;
@@ -453,7 +491,7 @@ public class RoofBot extends TelegramLongPollingBot {
         rows.add(List.of(callbackButton("200-300 м кв", "q3_3")));
         rows.add(List.of(callbackButton("более 300м кв", "q3_4")));
         rows.add(List.of(callbackButton("затрудняюсь ответить", "q3_5")));
-        rows.add(List.of(callbackButton("Вернуться в меню", "menu")));
+        rows.add(List.of(callbackButton(MENU_TEXT, "menu")));
         InlineKeyboardMarkup keyboard = new InlineKeyboardMarkup();
         keyboard.setKeyboard(rows);
         return keyboard;
@@ -461,7 +499,7 @@ public class RoofBot extends TelegramLongPollingBot {
 
     private InlineKeyboardMarkup menuOnlyButtons() {
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
-        rows.add(List.of(callbackButton("Вернуться в меню", "menu")));
+        rows.add(List.of(callbackButton(MENU_TEXT, "menu")));
         InlineKeyboardMarkup keyboard = new InlineKeyboardMarkup();
         keyboard.setKeyboard(rows);
         return keyboard;

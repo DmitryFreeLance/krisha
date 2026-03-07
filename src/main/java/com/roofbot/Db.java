@@ -65,6 +65,13 @@ public class Db {
                   created_at INTEGER
                 )
             """);
+            st.execute("""
+                CREATE TABLE IF NOT EXISTS media_cache (
+                  key TEXT PRIMARY KEY,
+                  file_id TEXT,
+                  updated_at INTEGER
+                )
+            """);
         }
     }
 
@@ -318,5 +325,35 @@ public class Db {
             }
         }
         return new Stats(total, today);
+    }
+
+    public String getMediaFileId(String key) throws SQLException {
+        String sql = "SELECT file_id FROM media_cache WHERE key = ?";
+        try (Connection conn = connect(); PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, key);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    return rs.getString("file_id");
+                }
+            }
+        }
+        return null;
+    }
+
+    public void upsertMediaFileId(String key, String fileId) throws SQLException {
+        String sql = """
+            INSERT INTO media_cache (key, file_id, updated_at)
+            VALUES (?, ?, ?)
+            ON CONFLICT(key) DO UPDATE SET
+              file_id=excluded.file_id,
+              updated_at=excluded.updated_at
+        """;
+        long now = Instant.now().toEpochMilli();
+        try (Connection conn = connect(); PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, key);
+            ps.setString(2, fileId);
+            ps.setLong(3, now);
+            ps.executeUpdate();
+        }
     }
 }
