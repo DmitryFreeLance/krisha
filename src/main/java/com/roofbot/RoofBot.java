@@ -5,6 +5,7 @@ import org.slf4j.LoggerFactory;
 import org.telegram.telegrambots.bots.TelegramLongPollingBot;
 import org.telegram.telegrambots.meta.api.methods.AnswerCallbackQuery;
 import org.telegram.telegrambots.meta.api.methods.ParseMode;
+import org.telegram.telegrambots.meta.api.methods.send.SendContact;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
 import org.telegram.telegrambots.meta.api.methods.send.SendPhoto;
 import org.telegram.telegrambots.meta.api.objects.CallbackQuery;
@@ -189,6 +190,11 @@ public class RoofBot extends TelegramLongPollingBot {
             return;
         }
 
+        if ("call_phone".equals(data)) {
+            sendPhoneCard(chatId);
+            return;
+        }
+
         if ("menu".equals(data)) {
             Session current = db.getSession(userId);
             if (current != null && current.step() != null && !STEP_DONE.equals(current.step())) {
@@ -249,9 +255,6 @@ public class RoofBot extends TelegramLongPollingBot {
         rows.add(List.of(callbackButton("🧮 Расчет кровельных работ", "calc_start")));
         rows.add(List.of(callbackButton("ℹ️ О нас", "about")));
         rows.add(List.of(callbackButton("📞 Связь с прорабом", "contact")));
-        if (isAdmin) {
-            rows.add(List.of(callbackButton("🛠 Админ панель", "admin_menu")));
-        }
         InlineKeyboardMarkup keyboard = new InlineKeyboardMarkup();
         keyboard.setKeyboard(rows);
         return keyboard;
@@ -317,7 +320,7 @@ public class RoofBot extends TelegramLongPollingBot {
 
         InlineKeyboardButton call = new InlineKeyboardButton();
         call.setText("Позвонить по телефону");
-        call.setUrl("tel:+79005553535");
+        call.setCallbackData("call_phone");
         rows.add(List.of(call));
 
         rows.add(List.of(callbackButton("Вернуться назад", "menu")));
@@ -329,6 +332,15 @@ public class RoofBot extends TelegramLongPollingBot {
         msg.setText("Связь с прорабом:");
         msg.setReplyMarkup(keyboard);
         execute(msg);
+    }
+
+    private void sendPhoneCard(long chatId) throws TelegramApiException {
+        SendContact contact = new SendContact();
+        contact.setChatId(String.valueOf(chatId));
+        contact.setPhoneNumber("+79005553535");
+        contact.setFirstName("Дмитрий");
+        contact.setLastName("Прораб");
+        execute(contact);
     }
 
     private void sendAdminMenu(long chatId) throws TelegramApiException {
