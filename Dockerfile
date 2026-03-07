@@ -8,11 +8,7 @@ RUN mvn -q -DskipTests package
 FROM eclipse-temurin:17-jre
 WORKDIR /app
 
-ENV BOT_TOKEN=
-ENV BOT_USERNAME=
-ENV ADMIN_IDS=
 ENV DB_PATH=/app/data/bot.db
-ENV PHOTO_PATH=/app/1.jpg
 
 RUN mkdir -p /app/data
 

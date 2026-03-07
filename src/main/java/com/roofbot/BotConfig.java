@@ -58,7 +58,7 @@ public class BotConfig {
                     .collect(Collectors.toSet());
         }
         String dbPathRaw = System.getenv().getOrDefault("DB_PATH", "./data/bot.db");
-        String photoPathRaw = System.getenv().getOrDefault("PHOTO_PATH", "./1.jpg");
+        String photoPathRaw = "./1.jpg";
         return new BotConfig(token, username, adminIds, Path.of(dbPathRaw), Path.of(photoPathRaw));
     }
 
