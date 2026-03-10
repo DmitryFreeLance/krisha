@@ -8,12 +8,14 @@ import org.telegram.telegrambots.meta.api.methods.ParseMode;
 import org.telegram.telegrambots.meta.api.methods.send.SendContact;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
 import org.telegram.telegrambots.meta.api.methods.send.SendPhoto;
+import org.telegram.telegrambots.meta.api.methods.updatingmessages.DeleteMessage;
 import org.telegram.telegrambots.meta.api.objects.CallbackQuery;
 import org.telegram.telegrambots.meta.api.objects.InputFile;
 import org.telegram.telegrambots.meta.api.objects.Message;
 import org.telegram.telegrambots.meta.api.objects.PhotoSize;
 import org.telegram.telegrambots.meta.api.objects.Update;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup;
+import org.telegram.telegrambots.meta.api.objects.replykeyboard.ReplyKeyboardRemove;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 
@@ -260,10 +262,11 @@ public class RoofBot extends TelegramLongPollingBot {
     }
 
     private void sendStartMenu(long chatId, long userId) throws TelegramApiException {
-        String text = "<b>СК ПРОРАБ СТРОЙ</b>\n" +
-                "Выполняем кровельные работы любой сложности:\n" +
-                "от строительства крыши с нуля до локальной замены покрытия,\n" +
-                "ремонта, устранения протечек.";
+        clearReplyKeyboard(chatId);
+
+        String text = "<b>СК КРОВЛЯ ПОД КЛЮЧ</b>\n" +
+                "Кровельные работы любой сложности.\n\n" +
+                "Наши крыши не текут, за нами не надо переделывать !";
 
         InlineKeyboardMarkup keyboard = mainMenuKeyboard(config.isAdmin(userId));
 
@@ -299,6 +302,20 @@ public class RoofBot extends TelegramLongPollingBot {
             msg.setParseMode(ParseMode.HTML);
             msg.setReplyMarkup(keyboard);
             execute(msg);
+        }
+    }
+
+    private void clearReplyKeyboard(long chatId) {
+        SendMessage msg = new SendMessage();
+        msg.setChatId(String.valueOf(chatId));
+        msg.setText(" ");
+        msg.setReplyMarkup(new ReplyKeyboardRemove(true));
+        try {
+            Message sent = execute(msg);
+            DeleteMessage deleteMessage = new DeleteMessage(String.valueOf(chatId), sent.getMessageId());
+            execute(deleteMessage);
+        } catch (TelegramApiException e) {
+            log.warn("Failed to remove reply keyboard", e);
         }
     }
 
