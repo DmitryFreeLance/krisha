@@ -518,7 +518,7 @@ public class RoofBot extends TelegramLongPollingBot {
         rows.add(List.of(callbackButton("Строительство крыши с нуля", "q1_1")));
         rows.add(List.of(callbackButton("Монтаж кровли", "q1_2")));
         rows.add(List.of(callbackButton("Замена старой кровли", "q1_3")));
-        rows.add(List.of(callbackButton("Утеплить кровлю", "q1_4")));
+        rows.add(List.of(callbackButton("Ремонт кровли", "q1_4")));
         rows.add(List.of(callbackButton("Монтаж кровельных аксессуаров", "q1_5")));
         rows.add(List.of(callbackButton("Другое", "q1_6")));
         rows.add(List.of(callbackButton(MENU_TEXT, "menu")));
@@ -595,7 +595,7 @@ public class RoofBot extends TelegramLongPollingBot {
             case "q1_1" -> "Строительство крыши с нуля";
             case "q1_2" -> "Монтаж кровли";
             case "q1_3" -> "Замена старой кровли";
-            case "q1_4" -> "Утеплить кровлю";
+            case "q1_4" -> "Ремонт кровли";
             case "q1_5" -> "Монтаж кровельных аксессуаров";
             case "q1_6" -> "Другое";
             default -> "Не указано";
